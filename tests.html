@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HistoryOsis tests</title>
+<style>
+  body{font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;margin:0;padding:16px;background:#fff;color:#1c1c1e}
+  main{max-width:760px;margin:0 auto}
+  h1{font-size:1.35rem;margin:0 0 4px}
+  h2{font-size:1.05rem;margin:22px 0 6px;border-bottom:1px solid #d1d1d6;padding-bottom:4px}
+  p.note{margin:0 0 12px;color:#4a4a4f}
+  #summary{font-weight:700;padding:10px 12px;border-radius:8px;margin:12px 0;border:2px solid #1c1c1e}
+  #summary.ok{background:#e6f4ea;border-color:#1b6e36;color:#14532d}
+  #summary.bad{background:#fde8e8;border-color:#b91c1c;color:#7f1d1d}
+  ul{list-style:none;margin:0;padding:0}
+  li{padding:5px 0;border-bottom:1px solid #ececf0;display:flex;gap:10px;align-items:baseline}
+  .tag{flex:none;font-weight:700;font-size:.8rem;min-width:3.2em;text-align:center;padding:1px 6px;border-radius:4px}
+  .pass .tag{background:#e6f4ea;color:#14532d}
+  .fail .tag{background:#b91c1c;color:#fff}
+  .detail{display:block;color:#7f1d1d;font-size:.85rem;word-break:break-word}
+  button{min-height:44px;padding:0 18px;border:1.5px solid #1a5fd9;background:#fff;color:#1a5fd9;border-radius:99px;font:inherit;font-weight:600;cursor:pointer}
+  #fixture{position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden}
+</style>
+</head>
+<body>
+<main>
+  <h1>HistoryOsis self-tests</h1>
+  <p class="note">Open this page in a browser from the same folder as <b>index.html</b>. Nothing is installed and no patient data is read or written. Every line should say PASS.</p>
+  <button type="button" id="rerun">Run again</button>
+  <div id="summary" role="status">Running…</div>
+  <div id="out"></div>
+</main>
+
+<!-- Hidden fields the vitals functions read, standing in for the real form -->
+<div id="fixture" aria-hidden="true">
+  <input id="vs-height"><input id="vs-weight"><input id="vs-bmi">
+  <input id="vs-bp"><input id="vs-pulse"><input id="vs-shock-index">
+  <input id="vs-rr"><input id="vs-spo2"><input id="vs-temp"><input id="vs-gcs">
+  <input id="vs-o2"><input id="vs-consc"><input type="checkbox" id="vs-scale2">
+</div>
+
+<!-- The same plain files the app loads, in the same order. Only files that need no page are used here. -->
+<script src="data.js"></script>
+<script src="datacheck.js"></script>
+<script src="util.js"></script>
+<script src="calc.js"></script>
+<script src="schema.js"></script>
+<script>
+(function () {
+  'use strict';
+  var results = [];
+  var group = '';
+  function section(name) { group = name; }
+  function rec(name, ok, detail) { results.push({ group: group, name: name, ok: !!ok, detail: ok ? '' : (detail || '') }); }
+  function show(v) { try { return typeof v === 'string' ? JSON.stringify(v) : JSON.stringify(v); } catch (e) { return String(v); } }
+  function eq(name, got, want) { var ok = show(got) === show(want); rec(name, ok, 'got ' + show(got) + ', expected ' + show(want)); }
+  function near(name, got, want, tol) { var ok = typeof got === 'number' && Math.abs(got - want) <= (tol || 0.01); rec(name, ok, 'got ' + show(got) + ', expected about ' + want); }
+  function yes(name, cond, detail) { rec(name, cond, detail || 'condition was false'); }
+  function attempt(name, fn) { try { fn(); } catch (e) { rec(name, false, 'threw: ' + (e && e.message)); } }
+  function setF(id, v) { var el = document.getElementById(id); if (el.type === 'checkbox') el.checked = !!v; else el.value = v; }
+  function clearF() { ['vs-height', 'vs-weight', 'vs-bmi', 'vs-bp', 'vs-pulse', 'vs-shock-index', 'vs-rr', 'vs-spo2', 'vs-temp', 'vs-gcs', 'vs-o2', 'vs-consc'].forEach(function (i) { setF(i, ''); }); setF('vs-scale2', false); document.getElementById('vs-shock-index').className = ''; }
+
+  function run() {
+    results = [];
+
+    /* ---------------- 1. height and weight ---------------- */
+    section('1. Height and weight parsing');
+    [['170 cm', 170], ['170cm', 170], ['1.7 m', 170], ['1.75', 175], ['170', 170], ['5\'10"', 177.8], ['5 ft 10 in', 177.8], ['5ft', 152.4], ['68 in', 172.72], ['66', 167.64], ['5\u203210\u2033', 177.8]].forEach(function (c) {
+      attempt('Height "' + c[0] + '"', function () { near('Height "' + c[0] + '" = ' + c[1] + ' cm', parseHeightToCm(c[0]), c[1], 0.05); });
+    });
+    ['', '   ', 'abc', 'tall', null].forEach(function (c) { eq('Height ' + show(c) + ' is not read', parseHeightToCm(c), null); });
+    [['70 kg', 70], ['70kg', 70], ['70', 70], ['150 lbs', 68.04], ['150 lb', 68.04], ['10.5 kg', 10.5]].forEach(function (c) { near('Weight "' + c[0] + '" = ' + c[1] + ' kg', parseWeightToKg(c[0]), c[1], 0.01); });
+    ['', 'heavy', null].forEach(function (c) { eq('Weight ' + show(c) + ' is not read', parseWeightToKg(c), null); });
+
+    section('2. BMI');
+    function bmi(h, w) { clearF(); setF('vs-height', h); setF('vs-weight', w); calcBMI(true); return document.getElementById('vs-bmi').value; }
+    eq('170 cm and 70 kg gives 24.2', bmi('170 cm', '70 kg'), '24.2');
+    eq('5\'10" and 150 lbs gives 21.5', bmi('5\'10"', '150 lbs'), '21.5');
+    eq('1.6 m and 90 kg gives 35.2', bmi('1.6 m', '90'), '35.2');
+    eq('Height only gives no BMI', bmi('170 cm', ''), '');
+    eq('Height out of range (30 cm) gives no BMI', bmi('30 cm', '70 kg'), '');
+    eq('Weight out of range (900 kg) gives no BMI', bmi('170 cm', '900 kg'), '');
+    eq('Unreadable text gives no BMI', bmi('tall', 'heavy'), '');
+
+    /* ---------------- 3. Shock Index ---------------- */
+    section('3. Shock Index');
+    function si(bp, hr) { clearF(); setF('vs-bp', bp); setF('vs-pulse', hr); calcShockIndex(true); var f = document.getElementById('vs-shock-index'); return { v: f.value, red: f.className === 'badge-red' }; }
+    eq('120/80 and pulse 96 = 0.80', si('120/80', '96').v, '0.80');
+    eq('130 (plain) and pulse 65 = 0.50', si('130', '65').v, '0.50');
+    eq('120 mmHg and pulse 84 = 0.70', si('120 mmHg', '84 bpm').v, '0.70');
+    eq('90/60 and pulse 100 = 1.11 and is flagged red', si('90/60', '100'), { v: '1.11', red: true });
+    eq('120/80 and pulse 96 is not flagged red', si('120/80', '96').red, false);
+    eq('Missing pulse gives no index', si('120/80', '').v, '');
+    eq('Zero pulse gives no index', si('120/80', '0').v, '');
+
+    /* ---------------- 4. NEWS2 worked examples ---------------- */
+    section('4. NEWS2 (Royal College of Physicians 2017 chart)');
+    function n2(o) { var base = { rr: null, spo2: null, sbp: null, hr: null, tempC: null, gcs: null, o2: '', consc: '', scale2: false }; for (var k in o) base[k] = o[k]; return news2Compute(base); }
+    var normal = { rr: 16, spo2: 98, o2: 'No', sbp: 120, hr: 70, consc: 'Alert', tempC: 37.0 };
+    var r = n2(normal); eq('All normal: score 0, Low', [r.total, r.band, r.missing.length], [0, 'Low', 0]);
+    r = n2({ rr: 24, spo2: 93, o2: 'Yes', sbp: 105, hr: 115, consc: 'Alert', tempC: 38.5 }); eq('RR 24, SpO2 93, oxygen, BP 105, pulse 115, temp 38.5: score 10, High', [r.total, r.band], [10, 'High']);
+    r = n2({ rr: 22, spo2: 98, o2: 'No', sbp: 120, hr: 120, consc: 'Alert', tempC: 38.5 }); eq('RR 22, pulse 120, temp 38.5: score 5, Medium', [r.total, r.band], [5, 'Medium']);
+    r = n2({ rr: 25, spo2: 98, o2: 'No', sbp: 90, hr: 105, consc: 'Alert', tempC: 37.0 }); eq('RR 25, BP 90, pulse 105: score 7, High', [r.total, r.band], [7, 'High']);
+    r = n2({ rr: 8, spo2: 98, o2: 'No', sbp: 120, hr: 70, consc: 'Alert', tempC: 37.0 }); eq('One red score (RR 8) with total 3: Low-medium', [r.total, r.band, r.anyThree], [3, 'Low-medium', true]);
+    r = n2({ rr: 22, spo2: 98, o2: 'No', sbp: 120, hr: 70, consc: 'Alert', tempC: 37.0 }); eq('Total 2 (no red): Low, ward-based response', [r.total, r.band], [2, 'Low']);
+    r = n2({ rr: 16, spo2: 98, o2: 'No', sbp: 120, hr: 70, consc: 'Confused', tempC: 37.0 }); eq('New confusion scores 3', [r.parts.consc, r.total], [3, 3]);
+    r = n2({ rr: 16, spo2: 98, o2: 'Yes', sbp: 120, hr: 70, consc: 'Alert', tempC: 37.0 }); eq('Supplemental oxygen scores 2', [r.parts.o2, r.total], [2, 2]);
+    eq('Boundaries: RR 9 -> 1, RR 12 -> 0, RR 21 -> 2, RR 25 -> 3', [9, 12, 21, 25].map(NEWS2_TABLE.rr), [1, 0, 2, 3]);
+    eq('Boundaries: SpO2 scale 1: 91 -> 3, 93 -> 2, 95 -> 1, 96 -> 0', [91, 93, 95, 96].map(NEWS2_TABLE.spo2s1), [3, 2, 1, 0]);
+    eq('SBP: 90 -> 3, 100 -> 2, 110 -> 1, 111 -> 0, 220 -> 3', [90, 100, 110, 111, 220].map(NEWS2_TABLE.sbp), [3, 2, 1, 0, 3]);
+    eq('Pulse: 40 -> 3, 50 -> 1, 90 -> 0, 91 -> 1, 111 -> 2, 131 -> 3', [40, 50, 90, 91, 111, 131].map(NEWS2_TABLE.hr), [3, 1, 0, 1, 2, 3]);
+    eq('Temperature: 35.0 -> 3, 36.0 -> 1, 38.0 -> 0, 39.0 -> 1, 39.1 -> 2', [35.0, 36.0, 38.0, 39.0, 39.1].map(NEWS2_TABLE.temp), [3, 1, 0, 1, 2]);
+    eq('SpO2 scale 2, on air: 88 -> 0, 93 -> 0, 84 -> 2', [NEWS2_TABLE.spo2s2(88, false), NEWS2_TABLE.spo2s2(93, false), NEWS2_TABLE.spo2s2(84, false)], [0, 0, 2]);
+    eq('SpO2 scale 2, on oxygen: 92 -> 0, 93 -> 1, 95 -> 2, 97 -> 3', [92, 93, 95, 97].map(function (x) { return NEWS2_TABLE.spo2s2(x, true); }), [0, 1, 2, 3]);
+    r = n2({ rr: 16 }); eq('Only one value entered: a partial score that lists what is missing', [r.total, r.entered, r.missing.length], [0, 1, 6]);
+    r = n2({}); eq('Nothing entered: no band', [r.entered, r.band], [0, '']);
+    // reading the form
+    clearF(); setF('vs-rr', '24/min'); setF('vs-spo2', '93%'); setF('vs-o2', 'Yes'); setF('vs-bp', '105/70'); setF('vs-pulse', '115 bpm'); setF('vs-consc', 'Alert'); setF('vs-temp', '38.5');
+    eq('Reading the form fields gives the same score of 10', news2Stored(), { score: '10', band: 'High', partial: '' });
+    clearF(); setF('vs-rr', '16');
+    eq('A partly filled form is marked partial', news2Stored(), { score: '0', band: 'Low', partial: 'Yes' });
+    clearF();
+    eq('An empty form stores nothing', news2Stored(), { score: '', band: '', partial: '' });
+    eq('Typed values: "96 bpm" -> 96, "97%" -> 97, "x" -> null', [vitalNum('96 bpm'), vitalNum('97%'), vitalNum('x')], [96, 97, null]);
+    eq('Systolic: "130/85" -> 130, "130 mmHg" -> 130, "abc" -> null', [vitalSystolic('130/85'), vitalSystolic('130 mmHg'), vitalSystolic('abc')], [130, 130, null]);
+    eq('Temperature: 38.5 -> 38.5 C, "101.3 F" -> 38.5 C, 99 -> 37.2 C, 20 -> not plausible', [vitalTempC('38.5'), vitalTempC('101.3 F'), vitalTempC('99'), vitalTempC('20')], [38.5, 38.5, 37.2, null]);
+    eq('GCS: "15" -> 15, "E3 V4 M5" -> 12, "2" -> not valid', [vitalGCS('15'), vitalGCS('E3 V4 M5'), vitalGCS('2')], [15, 12, null]);
+
+    /* ---------------- 5. escaping and CSV ---------------- */
+    section('5. Escaping and CSV');
+    eq('escH escapes < > & " and \'', escH('<b>"x" & \'y\'</b>'), '&lt;b&gt;&quot;x&quot; &amp; &#39;y&#39;&lt;/b&gt;');
+    eq('escH of nothing is an empty string', [escH(null), escH(undefined), escH('')], ['', '', '']);
+    eq('escH keeps a script tag from running', escH('<scr' + 'ipt>alert(1)<' + '/script>').indexOf('<'), -1);
+    eq('csvCell wraps in quotes', csvCell('abc'), '"abc"');
+    eq('csvCell doubles a quote', csvCell('say "hi"'), '"say ""hi"""');
+    eq('csvCell keeps a comma inside the cell', csvCell('a,b'), '"a,b"');
+    eq('csvCell flattens new lines', csvCell('a\nb\r\nc'), '"a b c"');
+    eq('csvCell blocks a spreadsheet formula (=)', csvCell('=1+1'), '"\'=1+1"');
+    eq('csvCell blocks +, - and @ formulas', [csvCell('+1'), csvCell('-1'), csvCell('@SUM(A1)')], ['"\'+1"', '"\'-1"', '"\'@SUM(A1)"']);
+    eq('csvCell of nothing is an empty cell', [csvCell(null), csvCell(undefined)], ['""', '""']);
+    eq('csvCell keeps a number', csvCell(42), '"42"');
+
+    /* ---------------- 6. import validation ---------------- */
+    section('6. Import validation');
+    var rec1 = { id: 'rec-1', demographics: { name: 'A' } }, rec2 = { id: 'rec-2', demographics: { name: 'B' } };
+    var p = parseImportPayload({ records: [rec1, rec2] }); eq('A backup file {records:[...]} gives 2 valid', [p.valid.length, p.invalidCount], [2, 0]);
+    p = parseImportPayload([rec1, rec2, rec1]); eq('A bare list is accepted', p.valid.length, 3);
+    p = parseImportPayload(rec1); eq('A single record is accepted', [p.valid.length, p.invalidCount], [1, 0]);
+    p = parseImportPayload({ records: [rec1, null, 'text', 7, { id: 'x' }, { demographics: {} }, { id: 'y', demographics: [] }, [] ] }); eq('Junk entries are counted and skipped', [p.valid.length, p.invalidCount], [1, 7]);
+    [null, undefined, 5, 'text', {}, { records: 'no' }, { records: {} }].forEach(function (x) { var q = parseImportPayload(x); eq('Payload ' + show(x) + ' gives no records and does not crash', q.valid.length, 0); });
+    var dirty = { id: 'a b/c', deletedAt: '2020-01-01', demographics: { name: { evil: 1 }, age: 5, mrno: null }, history: { pcs: ['x', { label: 'ok' }, null], rosSelected: 'nope', comorbidItems: ['a', null, { x: 1 }, 'b'], fhSelected: [1, 2] }, exam: { vitals: 'bad', systems: [{ system: 'CVS', findings: 'bad' }, 'junk', { nosystem: 1 }] }, investigations: { items: 'bad' }, treatment: { items: [1, { name: 'x' }] }, progressNotes: 'bad' };
+    var clean = sanitizeImportedRecord(dirty);
+    yes('An unsafe id is replaced', /^[\w-]+$/.test(clean.id) && clean.id !== dirty.id, show(clean.id));
+    yes('deletedAt is removed (imports arrive active)', clean.deletedAt === undefined);
+    eq('Demographics become text', clean.demographics, { name: '', age: '5', mrno: '' });
+    eq('History lists become clean lists', [clean.history.pcs, clean.history.rosSelected, clean.history.comorbidItems, clean.history.fhSelected], [[{ label: 'ok' }], [], ['a', 'b'], ['1', '2']]);
+    eq('Exam keeps only well-formed systems, each with findings', [clean.exam.vitals, clean.exam.systems], [{}, [{ system: 'CVS', findings: {} }]]);
+    eq('Bad investigation, treatment and note lists are fixed', [clean.investigations.items, clean.treatment.items, clean.progressNotes], [[], [{ name: 'x' }], []]);
+    yes('The input object is not changed', dirty.id === 'a b/c' && dirty.deletedAt === '2020-01-01');
+
+    /* ---------------- 7. data.js validation ---------------- */
+    section('7. data.js validation');
+    var P = medicalDataPools, L = systemLabels;
+    var dom = { investCats: Object.keys(P.investigations), treatCats: Object.keys(P.treatments) };
+    function errs(pools, labels, d) { return validateData(pools, labels || L, d || dom).filter(function (x) { return x.level === 'error'; }).map(function (x) { return x.msg; }); }
+    function clone(o) { return JSON.parse(JSON.stringify(o)); }
+    function expectErr(name, mutate, rx, labelsMut, domMut) {
+      attempt(name, function () {
+        var d = clone(P), l = clone(L), dm = clone(dom);
+        mutate(d, l, dm);
+        var e = errs(d, l, dm);
+        yes(name, e.some(function (m) { return rx.test(m); }), 'errors were: ' + show(e.slice(0, 3)));
+      });
+    }
+    eq('The real data.js has no errors', errs(P), []);
+    yes('data.js has a dataVersion that is a whole number above 0', Number.isInteger(P.dataVersion) && P.dataVersion > 0, show(P.dataVersion));
+    (function () { var d = clone(P); delete d.dataVersion; var w = validateData(d, L, dom).filter(function (x) { return x.level === 'warn' && /dataVersion/.test(x.msg); }); yes('A missing dataVersion is reported as a note', w.length === 1); })();
+    expectErr('Duplicate complaint labels are caught', function (d) { d.presentingComplaints.push(clone(d.presentingComplaints[0])); }, /Duplicate complaint label/);
+    expectErr('Duplicate labels that differ only in capitals are caught', function (d) { var c = clone(d.presentingComplaints[0]); c.label = c.label.toUpperCase(); d.presentingComplaints.push(c); }, /Duplicate complaint label/);
+    expectErr('A system code missing from systemLabels is caught', function (d) { d.presentingComplaints[0].system = 'NOPE'; }, /system code "NOPE"/);
+    expectErr('A complaint with no system is caught', function (d) { delete d.presentingComplaints[0].system; }, /no system code/);
+    expectErr('An exam field with no label is caught', function (d) { delete d.examinations[0].fields[0].label; }, /field #1 has no label/);
+    expectErr('A duplicate exam field label is caught', function (d) { d.examinations[0].fields[1].label = d.examinations[0].fields[0].label; }, /duplicate field label/);
+    expectErr('An exam select with no options is caught', function (d) { d.examinations[0].fields[0].options = []; }, /select but has no options/);
+    expectErr('An exam field with an unknown type is caught', function (d) { d.examinations[0].fields[0].type = 'banana'; }, /unknown type "banana"/);
+    expectErr('An investigation category missing from the HTML dropdown is caught', function (d, l, dm) { dm.investCats = dm.investCats.slice(1); }, /Investigation category/);
+    expectErr('A new investigation category not in the dropdown is caught', function (d) { d.investigations['Brand new category'] = ['X']; }, /Investigation category "Brand new category"/);
+    expectErr('A treatment category missing from the HTML dropdown is caught', function (d) { d.treatments['Alternative'] = ['Y']; }, /Treatment category "Alternative"/);
+    expectErr('A template item not in the pools is caught', function (d) { d.templates[0].investigations.push('Made-up test'); }, /Template ".*": investigation "Made-up test"/);
+    expectErr('A template complaint not in the pools is caught', function (d) { d.templates[0].complaints.push('Made-up complaint'); }, /complaint "Made-up complaint"/);
+    expectErr('A template exam system not in the pools is caught', function (d) { d.templates[0].exam.push('Made-up system'); }, /exam system "Made-up system"/);
+    expectErr('A template treatment not in the pools is caught', function (d) { d.templates[0].treatments.push('Made-up drug'); }, /treatment "Made-up drug"/);
+    expectErr('A broken chip group is caught', function (d) { var c = d.presentingComplaints.filter(function (x) { return x.chips && x.chips.length; })[0]; c.chips[0].type = 'wobble'; }, /unknown type "wobble"/);
+    expectErr('A list that is not a list is caught', function (d) { d.rosSymptoms = 'oops'; }, /"rosSymptoms" must be a list/);
+    expectErr('A missing medicalDataPools is caught', function (d) { }, /^$/ , null, null);   // replaced below
+    results.pop();
+    eq('A missing medicalDataPools gives a readable error', validateData(undefined, L, dom).map(function (x) { return x.level; }), ['error']);
+    eq('A missing systemLabels gives a readable error', validateData(clone(P), undefined, dom).some(function (x) { return x.level === 'error' && /systemLabels/.test(x.msg); }), true);
+
+    /* ---------------- 8. old records ---------------- */
+    section('8. Migration of an old record (numeric exam keys)');
+    var sys = P.examinations[0], f0 = sys.fields[0].label, f1 = sys.fields[1].label;
+    var item = { system: sys.system, findings: { 0: 'Regular', 1: 'Elevated' } };
+    migrateExamFindings(item);
+    eq('Numeric keys become field labels', [item.findings[f0], item.findings[f1]], ['Regular', 'Elevated']);
+    yes('The numeric keys are removed', Object.keys(item.findings).every(function (k) { return !/^\d+$/.test(k); }), show(Object.keys(item.findings)));
+    item = { system: sys.system, findings: { 0: 'old', [f0]: 'new' } };
+    migrateExamFindings(item); eq('When both exist the label wins', item.findings[f0], 'new');
+    item = { system: 'No such system', findings: { 0: 'x' } };
+    migrateExamFindings(item); eq('An unknown system is left alone', item.findings, { 0: 'x' });
+    item = { system: sys.system }; migrateExamFindings(item); eq('A record with no findings gets an empty findings object', item.findings, {});
+    eq('exVal reads a label first, then the old number', [exVal({ findings: { [f0]: 'A' } }, sys.fields[0], 0), exVal({ findings: { 0: 'B' } }, sys.fields[0], 0), exVal({ findings: {} }, sys.fields[0], 0), exVal(null, sys.fields[0], 0)], ['A', 'B', '', '']);
+
+    render();
+  }
+
+  function render() {
+    var pass = results.filter(function (x) { return x.ok; }).length, fail = results.length - pass;
+    var out = document.getElementById('out'); out.innerHTML = '';
+    var cur = null, ul = null;
+    results.forEach(function (x) {
+      if (x.group !== cur) { cur = x.group; var h = document.createElement('h2'); h.textContent = cur; out.appendChild(h); ul = document.createElement('ul'); out.appendChild(ul); }
+      var li = document.createElement('li'); li.className = x.ok ? 'pass' : 'fail';
+      var t = document.createElement('span'); t.className = 'tag'; t.textContent = x.ok ? 'PASS' : 'FAIL';
+      var s = document.createElement('span'); s.textContent = x.name;
+      if (!x.ok && x.detail) { var d = document.createElement('span'); d.className = 'detail'; d.textContent = x.detail; s.appendChild(d); }
+      li.appendChild(t); li.appendChild(s); ul.appendChild(li);
+    });
+    var sum = document.getElementById('summary');
+    sum.className = fail ? 'bad' : 'ok';
+    sum.textContent = fail ? (fail + ' FAILED, ' + pass + ' passed') : ('All ' + pass + ' tests PASS');
+    document.title = (fail ? 'FAIL' : 'PASS') + ' - HistoryOsis tests';
+    window.__testResults = { pass: pass, fail: fail, results: results };
+  }
+
+  document.getElementById('rerun').addEventListener('click', run);
+  try { run(); } catch (e) { var s = document.getElementById('summary'); s.className = 'bad'; s.textContent = 'The tests could not run: ' + e.message; window.__testResults = { pass: 0, fail: 1, results: [], error: String(e) }; }
+})();
+</script>
+</body>
+</html>

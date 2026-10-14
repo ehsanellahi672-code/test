@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>try{if(JSON.parse(localStorage.getItem('historyosis_lock')||'{}').enabled)document.documentElement.classList.add('lock-boot');}catch(e){}</script>
+<style>.lock-boot #app-header,.lock-boot #app-main,.lock-boot #fab-new-intake{display:none!important}</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#F5F5F7">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HistoryOsis">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script>/* Prompt 14: apply theme and text size before first paint so there is no flash */
+(function(){try{var a=JSON.parse(localStorage.getItem('historyosis_appearance')||'null')||{};var t=(a.theme==='light'||a.theme==='dark')?a.theme:'auto';var mq=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)');var dark=t==='dark'||(t==='auto'&&!!mq&&mq.matches);var d=document.documentElement;d.setAttribute('data-theme',dark?'dark':'light');d.setAttribute('data-theme-pref',t);d.setAttribute('data-size',(a.size==='small'||a.size==='large')?a.size:'normal');}catch(e){}})();
+</script>
+<title>HistoryOsis — Clinical Intake</title>
+<script>/* Prompt 15: remember files that fail to load, so a readable panel can be shown instead of a blank page */
+window.__loadErrors=[];window.addEventListener('error',function(e){var t=e.target;if(t&&t.getAttribute&&(t.tagName==="SCRIPT"||t.tagName==="LINK")&&(t.getAttribute("src")||t.getAttribute("href"))){window.__loadErrors.push({file:(t.getAttribute("src")||t.getAttribute("href")),kind:"missing"});}else if(e.filename){window.__loadErrors.push({file:String(e.filename).split("/").pop(),kind:"error",msg:String(e.message||"")});}},true);</script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#app-main">Skip to main content</a>
+
+<div id="privacy-blanket" style="display:none; position:fixed; inset:0; background:var(--bg); z-index:99999;"></div>
+<div id="lock-screen" style="display:none; position:fixed; inset:0; background:var(--bg); z-index:2000; flex-direction:column; align-items:center; justify-content:center; padding:20px;">
+   <div class="brand-logo" style="margin-bottom:20px; width:64px; height:64px;">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+        <rect x="4.5" y="9" width="15" height="12" rx="2.5" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
+        <path d="M7 9V6C7 4.5 8.5 3 12 3C15.5 3 17 4.5 17 6V9" stroke="rgba(255,255,255,0.8)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="15" r="1.5" fill="#fff"/>
+        <path d="M12 16.5V18" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+   </div>
+   <h2 style="margin-bottom:8px; font-size:1.4rem;">App Locked</h2>
+   <p style="color:var(--text-muted); margin-bottom:24px; font-size:0.9rem">Enter PIN or passphrase to unlock</p>
+   <input type="password" id="lock-pin" autocomplete="off" autocapitalize="off" maxlength="64" placeholder="PIN / Passphrase" style="max-width:280px; text-align:center; font-size:1.2rem; letter-spacing:0.2em; margin-bottom:16px;">
+   <button class="btn btn-primary" onclick="attemptUnlock()" id="btn-unlock" style="width:100%; max-width:280px; padding:12px;">Unlock</button>
+   <div id="lockout-timer" style="color:var(--danger); font-weight:bold; margin-top:16px; display:none; font-size:0.9rem;"></div>
+   <button class="btn btn-secondary" style="margin-top:24px; background:transparent; border:none; box-shadow:none; color:var(--text-muted);" onclick="forgotPin()">Forgot PIN?</button>
+</div>
+
+<div id="app-header" role="banner">
+  <div class="header-inner">
+    <div class="brand-row">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+          <rect x="4.5" y="5" width="15" height="16" rx="2.5" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
+          <rect x="9" y="3" width="6" height="3.5" rx="1.5" fill="rgba(255,255,255,0.5)"/>
+          <rect x="10.75" y="9" width="2.5" height="8" rx="1.25" fill="#fff"/>
+          <rect x="7.5" y="12" width="9" height="2.5" rx="1.25" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name">History<span>Osis</span></div>
+        <div class="brand-sub">Clinical Intake &amp; Record System</div>
+        <div class="brand-credit">HistoryOsis Technologies</div>
+      </div>
+      <button id="btn-lock-now" class="btn btn-secondary btn-sm" style="display:none; padding:5px 10px; margin-right:8px;" onclick="triggerLock()" title="Lock Now">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      </button>
+      <div class="brand-version">v2.2</div>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('form')" id="tab-btn-form">
+        <svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="12" y2="16"/></svg>
+        <span class="tab-label">Intake Form</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('records')" id="tab-btn-records">
+        <svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="11" y2="17"/></svg>
+        <span class="tab-label">Saved Records</span>
+      </button>
+      <button class="round-toggle-btn" onclick="toggleRoundView()" id="round-toggle-btn" title="Toggle Round View">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        <span class="tab-label">Round View</span>
+      </button>
+    </div>
+  </div>
+  <div id="round-view-banner">🟢 ROUND VIEW ACTIVE</div>
+</div>
+
+<div id="app-main" role="main" tabindex="-1">
+
+  <div class="tab-panel active" id="tab-form">
+
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>Form Completion</span>
+        <span class="progress-pct-badge" id="progress-pct">0%</span>
+      </div>
+      <div class="progress-bar" role="progressbar" aria-label="Form completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+
+    <div class="tpl-bar" id="tpl-bar">
+      <button type="button" class="btn btn-secondary" id="tpl-start-btn" onclick="openTemplates()">⚡ Start from template</button>
+      <button type="button" class="btn btn-secondary" id="tpl-save-btn" onclick="openSaveTemplate()">★ Save as template</button>
+    </div>
+
+    <div id="rv-banner" class="rv-banner" role="status" hidden></div>
+    <div class="card open" id="sec-demographics">
+      <div class="card-header" onclick="toggleCard('sec-demographics')">
+        <div class="card-header-left">
+          <div class="section-icon">A</div>
+          <div><div class="section-title">A — Demographics</div><div class="section-subtitle">Patient ID &amp; admission details</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="complete-dot" id="dot-demographics"></div><div class="chevron">▼</div></div>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="field"><label>Full Name</label><input type="text" id="d-name" placeholder="Patient full name" oninput="updateProgress()"></div>
+          <div class="field"><label>MR Number <span class="guidance">(Medical Record No)</span></label><input type="text" id="d-mrno" placeholder="e.g. MR-2025-001" oninput="updateProgress()"></div>
+        </div>
+        <div class="cf-offer" id="cf-offer" hidden role="status"></div>
+        <div class="row-3">
+          <div class="field"><label for="d-age">Age</label><div style="display:flex;gap:6px"><input type="number" id="d-age" placeholder="Age" min="0" max="120" step="any" inputmode="decimal" style="min-width:0;flex:1" oninput="onAgeSexChange()"><select id="d-age-unit" aria-label="Age unit" style="width:auto;flex:0 0 auto" onchange="onAgeSexChange()"><option value="">years</option><option value="months">months</option><option value="days">days</option></select></div></div>
+          <div class="field"><label>Sex</label><select id="d-sex" onchange="onAgeSexChange()"><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+          <div class="field"><label>Bed Number</label><input type="text" id="d-bedno" placeholder="e.g. W3-B12"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Department</label><select id="d-dept"><option value="">Select</option><option>General Medicine</option><option>General Surgery</option><option>Orthopedics</option><option>Obstetrics &amp; Gynecology</option><option>Pediatrics</option><option>Cardiology</option><option>Pulmonology</option><option>Gastroenterology</option><option>Neurology</option><option>Urology</option><option>ENT</option><option>Dermatology</option><option>Psychiatry</option><option>Emergency Medicine</option><option>ICU/Critical Care</option><option>Ophthalmology</option><option>Nephrology</option><option>Endocrinology</option><option>Rheumatology</option><option>Oncology</option></select></div>
+          <div class="field"><label>Admitted Via</label><select id="d-admit-via"><option value="">Select</option><option>OPD (Outpatient)</option><option>ER / A&amp;E (Emergency)</option><option>Referral (Internal)</option><option>Referral (External)</option><option>Transfer (ICU)</option><option>Elective Admission</option></select></div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="d-status">Status <span class="guidance">(optional)</span></label><select id="d-status"><option value="">None</option><option>Draft</option><option>Complete</option><option>Discharged</option></select></div>
+          <div class="field"><label for="d-tag-input">Tags <span class="guidance">(optional, press Enter)</span></label><input type="text" id="d-tag-input" list="tag-suggest" maxlength="30" autocomplete="off" enterkeyhint="done" placeholder="e.g. teaching, discharge pending"><datalist id="tag-suggest"></datalist><div class="chip-row" id="d-tags"></div></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Occupation <span class="guidance">(note exposure/lifestyle risk)</span></label><input type="text" id="d-occupation" placeholder="e.g. Teacher, Farmer, Retired"></div>
+          <div class="field"><label>Residence <span class="guidance">(urban/rural; district)</span></label><input type="text" id="d-residence" placeholder="e.g. Rural, Lahore"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Date of Admission</label><input type="date" id="d-date-admission"></div>
+          <div class="field"><label>Time of Admission</label><input type="time" id="d-time-admission"></div>
+        </div>
+        <div class="field"><label>Informant <span class="guidance">(who gave history; reliability)</span></label><input type="text" id="d-informant" placeholder="e.g. Patient herself — reliable"></div>
+        <div class="field"><label>Additional Demographics</label><textarea id="d-custom" placeholder="Any other relevant demographic details..."></textarea></div>
+      </div>
+    </div>
+
+    <div class="card" id="sec-history">
+      <div class="card-header" onclick="toggleCard('sec-history')">
+        <div class="card-header-left">
+          <div class="section-icon">B</div>
+          <div><div class="section-title">B — Structured History</div><div class="section-subtitle">PC, HOPI, ROS, Comorbidities, PMH, FH, SH</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="complete-dot" id="dot-history"></div><div class="chevron">▼</div></div>
+      </div>
+      <div class="card-body">
+        <div class="allergy-banner" id="allergy-banner-hist" role="status"><span>⚠ Allergies not recorded</span><button type="button" class="btn btn-warning btn-sm" onclick="setNKDA()">No known drug allergies</button></div>
+        <div class="subsection-label">Chief Complaints (PC) + HOPI</div>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Select a complaint or type a custom one, then tap <strong>+ Add</strong>. Each complaint gets its own HOPI card.</p>
+        <div class="system-chips" id="pc-system-chips"></div>
+        <div class="pc-selector">
+          <div class="field"><label>Select Complaint</label><select id="pc-dropdown"><option value="">— Presenting complaint —</option></select></div>
+          <div class="field"><label>Or Custom</label><input type="text" id="pc-custom-input" placeholder="Type complaint..."></div>
+          <button class="btn btn-primary add-btn" onclick="pickerAdd('pc')">+ Add</button>
+        </div>
+        <div id="pc-cards-container"></div>
+        <hr class="divider">
+
+        <div class="subsection-label">Review of Systems <span class="guidance">(CVS, Resp, GI, GU, Neuro, MSK, Derm, Psych, Haem, Endo)</span></div>
+        <div class="add-action-row">
+          <div class="field"><label>Select System Symptom</label><select id="ros-dropdown"><option value="">— Select —</option></select></div>
+          <button class="btn btn-primary add-btn" onclick="pickerAdd('ros')">+ Add</button>
+        </div>
+        <div id="ros-container" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+        <div class="field"><label>ROS Narrative</label><textarea id="ros-narrative" placeholder="Document positive and negative findings systematically..." oninput="updateProgress()"></textarea></div>
+        <div class="field"><label>ROS Custom Entry</label><textarea id="ros-custom" placeholder="Additional systems or findings..."></textarea></div>
+        <hr class="divider">
+
+        <div class="subsection-label">Comorbidities <span class="guidance">(Known chronic conditions)</span></div>
+        <div class="cf-mark" id="cf-mark-comorbid" hidden></div>
+        <div class="add-action-row">
+          <div class="field"><label>Select Comorbidity</label><select id="comorbid-dropdown"><option value="">— Select —</option></select></div>
+          <button class="btn btn-primary add-btn" onclick="pickerAdd('comorbid')">+ Add</button>
+        </div>
+        <div id="comorbid-container" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+        <div class="field"><label>Comorbidities Narrative / Custom</label><textarea id="comorbid-narrative" placeholder="e.g. T2DM for 10 years, poorly controlled..."></textarea></div>
+        <hr class="divider">
+
+        <div class="subsection-label">Past Medical &amp; Surgical History <span class="guidance">(diagnoses, operations, transfusions)</span></div>
+        <div class="cf-mark" id="cf-mark-pmh" hidden></div>
+        <div class="row">
+          <div class="field"><label>Past Medical Conditions</label><textarea id="pmh-medical" placeholder="e.g. HTN (2018, amlodipine), T2DM (2015)" oninput="updateProgress()"></textarea></div>
+          <div class="field"><label>Past Surgical History</label><textarea id="pmh-surgical" placeholder="e.g. Appendectomy (2019, uneventful)"></textarea></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Drug History <span class="guidance">(current meds, dose, duration)</span></label><textarea id="pmh-drugs" placeholder="e.g. Metformin 500mg BD, Lisinopril 5mg OD"></textarea><div class="cf-ack" id="cf-ack-drugs" hidden></div></div>
+          <div class="field"><label>Allergies <span class="guidance">(drug, food, reaction type)</span></label><textarea id="pmh-allergies" placeholder="e.g. Penicillin → anaphylaxis; NKDA"></textarea><div class="cf-ack" id="cf-ack-allergies" hidden></div></div>
+        </div>
+        <div class="field"><label>Immunisation History</label><input type="text" id="pmh-immunisation" placeholder="e.g. Up-to-date / COVID-19 booster Jan 2024"></div>
+        <div class="field"><label>PMH Custom Entry</label><textarea id="pmh-custom" placeholder="Other past history details..."></textarea></div>
+        <hr class="divider">
+
+        <div class="subsection-label">Family History <span class="guidance">(first-degree relatives; age of onset, cause of death)</span></div>
+        <div class="cf-mark" id="cf-mark-fh" hidden></div>
+        <div class="add-action-row">
+          <div class="field"><label>Select Condition</label><select id="fh-dropdown"><option value="">— Select —</option></select></div>
+          <button class="btn btn-primary add-btn" onclick="pickerAdd('fh')">+ Add</button>
+        </div>
+        <div id="fh-container" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
+        <div class="field"><label>Family History Narrative</label><textarea id="fh-narrative" placeholder="e.g. Father: HTN, MI at 52. Mother: T2DM."></textarea></div>
+        <div class="field"><label>FH Custom Entry</label><textarea id="fh-custom" placeholder="Additional family history details..."></textarea></div>
+        <hr class="divider">
+
+        <div id="paeds-section" style="display:none">
+          <div class="subsection-label">Paediatric History <span class="guidance">(shown when age is under 16)</span></div>
+          <div class="field"><label for="pd-birth">Birth history</label><textarea id="pd-birth" placeholder="Gestation, mode of delivery, birth weight, neonatal problems (NICU, jaundice)..."></textarea></div>
+          <div class="row">
+            <div class="field"><label for="pd-feeding">Feeding / diet</label><input type="text" id="pd-feeding" placeholder="e.g. Breastfed to 6 months, now family diet"></div>
+            <div class="field"><label for="pd-immunisation">Immunisation status</label><input type="text" id="pd-immunisation" placeholder="e.g. Up to date for age (EPI card seen)"></div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="pd-development">Development</label><input type="text" id="pd-development" placeholder="e.g. Walked at 12 months, 2-word phrases at 24 months"></div>
+            <div class="field" id="pd-weight-field"><label for="pd-weight">Weight <span class="guidance">(required for children)</span></label><input type="text" id="pd-weight" placeholder="e.g. 18 kg"></div>
+          </div>
+          <div class="peds-note">Doses are not calculated by this app. Check every dose against a paediatric formulary and the child's weight.</div>
+          <hr class="divider">
+        </div>
+
+        <div id="repro-section" style="display:none">
+          <div class="subsection-label">Reproductive History <span class="guidance">(menarche, LMP, G_P_A_, contraception, menopause)</span></div>
+          <div class="row">
+            <div class="field"><label>Menarche &amp; Cycle</label><input type="text" id="repro-menarche" placeholder="e.g. Menarche age 12; cycle 28/5 days, regular"></div>
+            <div class="field"><label>LMP</label><input type="date" id="repro-lmp"></div>
+          </div>
+          <div class="row">
+            <div class="field"><label>Obstetric History <span class="guidance">(G P A L)</span></label><input type="text" id="repro-obstetric" placeholder="e.g. G3P2A1L2; SVD x2"></div>
+            <div class="field"><label>Contraception</label><input type="text" id="repro-contraception" placeholder="e.g. OCP, IUD, barrier, nil"></div>
+          </div>
+          <div class="field" id="repro-preg-field"><label for="repro-preg">Pregnancy status</label><select id="repro-preg"><option value="">Select</option><option>Not pregnant</option><option>Pregnant</option><option>Unknown</option></select></div>
+          <div class="field"><label>Cervical Smear / Mammogram</label><input type="text" id="repro-screening" placeholder="e.g. Smear 2023 – normal"></div>
+          <div class="field"><label>Repro Custom / Menopause</label><textarea id="repro-custom" placeholder="Menopause age, HRT, pelvic floor issues..."></textarea></div>
+          <hr class="divider">
+        </div>
+
+        <div class="subsection-label">Personal &amp; Social History <span class="guidance">(smoking, alcohol, diet, exercise, travel, living)</span></div>
+        <div class="cf-mark" id="cf-mark-sh" hidden></div>
+        <div class="row">
+          <div class="field"><label>Smoking</label><select id="sh-smoking"><option value="">Select</option><option>Never</option><option>Ex-smoker</option><option>Current smoker</option><option>Passive exposure</option><option>Tobacco (non-cigarette)</option></select></div>
+          <div class="field"><label>Smoking Details</label><input type="text" id="sh-smoking-detail" placeholder="e.g. 20 pack-years; quit 2019"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Alcohol</label><select id="sh-alcohol"><option value="">Select</option><option>None</option><option>Occasional</option><option>Moderate (≤14 units/week)</option><option>Heavy (&gt;14 units/week)</option><option>Dependent</option><option>Ex-drinker</option></select></div>
+          <div class="field"><label>Recreational Drugs</label><select id="sh-drugs"><option value="">Select</option><option>Nil</option><option>Cannabis</option><option>Opiates</option><option>Stimulants</option><option>Multiple</option><option>Ex-user</option></select></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Diet</label><select id="sh-diet"><option value="">Select</option><option>Balanced / Unremarkable</option><option>Vegetarian</option><option>Vegan</option><option>Low-salt</option><option>Diabetic diet</option><option>Poor / Inadequate</option></select></div>
+          <div class="field"><label>Exercise</label><select id="sh-exercise"><option value="">Select</option><option>Sedentary</option><option>Mild (walks)</option><option>Moderate (3–5x/week)</option><option>Active / Athletic</option></select></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Travel History <span class="guidance">(last 6 months)</span></label><input type="text" id="sh-travel" placeholder="e.g. No recent travel / SE Asia 3 wks ago"></div>
+          <div class="field"><label>Living Situation</label><input type="text" id="sh-living" placeholder="e.g. Lives with spouse, 2-storey house"></div>
+        </div>
+        <div class="field"><label>Functional Status / ADLs</label><input type="text" id="sh-adl" placeholder="e.g. Fully independent; works full-time"></div>
+        <div class="field"><label>SH Custom Entry</label><textarea id="sh-custom" placeholder="Occupational exposures, sexual history, finances..."></textarea></div>
+      </div>
+    </div>
+
+    <div class="card" id="sec-exam">
+      <div class="card-header" onclick="toggleCard('sec-exam')">
+        <div class="card-header-left">
+          <div class="section-icon">C</div>
+          <div><div class="section-title">C — Examination</div><div class="section-subtitle">General + system-specific findings</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="complete-dot" id="dot-exam"></div><div class="chevron">▼</div></div>
+      </div>
+      <div class="card-body">
+        <div class="redflag-line" id="vitals-redflags" role="status"></div>
+        <div class="subsection-label">Vital Signs</div>
+        <div class="vitals-grid">
+          <div class="field"><label>BP (mmHg)</label><input type="text" id="vs-bp" placeholder="e.g. 130/85" oninput="calcShockIndex(true)"><div class="vtag" id="vtag-bp"></div></div>
+          <div class="field"><label>Pulse (bpm)</label><input type="text" id="vs-pulse" placeholder="e.g. 78" oninput="calcShockIndex(true)"><div class="vtag" id="vtag-pulse"></div></div>
+          <div class="field"><label>Shock Index</label><input type="text" id="vs-shock-index" readonly></div>
+          <div class="field"><label>RR (/min)</label><input type="number" id="vs-rr" placeholder="16"><div class="vtag" id="vtag-rr"></div></div>
+          <div class="field"><label>SpO₂ (%)</label><input type="number" id="vs-spo2" placeholder="98" max="100"><div class="vtag" id="vtag-spo2"></div></div>
+          <div class="field"><label>Temp (°F)</label><input type="number" id="vs-temp" step="0.1" placeholder="98.6"><div class="vtag" id="vtag-temp"></div></div>
+          <div class="field"><label>GCS</label><input type="text" id="vs-gcs" placeholder="15 (E4V5M6)"><div class="vtag" id="vtag-gcs"></div></div>
+          <div class="field"><label>Height</label><input type="text" id="vs-height" placeholder="e.g. 170 cm or 5'9&quot;" oninput="calcBMI(true)"></div>
+          <div class="field"><label>Weight</label><input type="text" id="vs-weight" placeholder="e.g. 70 kg or 150 lbs" oninput="calcBMI(true)"></div>
+          <div class="field"><label>BMI (auto)</label><input type="text" id="vs-bmi" readonly></div>
+        </div>
+        <div class="btn-group" style="margin-top: 12px; margin-bottom: 8px;">
+          <button class="btn btn-secondary btn-sm" onclick="calcBMI()">Calculate BMI</button>
+          <button class="btn btn-secondary btn-sm" onclick="calcShockIndex()">Calculate Shock Index</button>
+        </div>
+
+        <div class="news2-box" id="news2-box">
+          <div class="subsection-label" style="margin-top:0">NEWS2 <span class="guidance">(uses the vitals above)</span></div>
+          <div class="row">
+            <div class="field"><label for="vs-o2">Supplemental oxygen</label><select id="vs-o2"><option value="">Select</option><option value="No">No (room air)</option><option value="Yes">Yes</option></select></div>
+            <div class="field"><label for="vs-consc">Consciousness</label><select id="vs-consc"><option value="">Select</option><option>Alert</option><option>Confusion / new onset</option><option>Voice</option><option>Pain</option><option>Unresponsive</option></select></div>
+          </div>
+          <label class="news2-check" for="vs-scale2"><input type="checkbox" id="vs-scale2"> Use SpO₂ Scale 2 (target 88–92%, e.g. COPD with hypercapnic failure)</label>
+          <div class="news2-result" id="news2-result" role="status">Enter vitals to see the NEWS2 score.</div>
+          <div class="news2-note">Decision support only. Clinical judgement and local protocols apply.</div>
+        </div>
+        
+        <div class="subsection-label" style="margin-top:16px">General Examination <span class="guidance">(appearance, pallor, jaundice, cyanosis, clubbing, lymph, oedema)</span></div>
+        <div class="row">
+          <div class="field"><label>General Appearance</label><select id="gen-appearance"><option value="">Select</option><option>Well, alert, no distress</option><option>Ill-looking, distressed</option><option>Cachexic / malnourished</option><option>Unconscious / obtunded</option><option>Anxious</option></select></div>
+          <div class="field"><label>Pallor</label><select id="gen-pallor"><option value="">Select</option><option>Absent</option><option>Mild</option><option>Moderate</option><option>Severe</option></select></div>
+        </div>
+        <div class="row-3">
+          <div class="field"><label>Jaundice</label><select id="gen-jaundice"><option value="">Select</option><option>Absent</option><option>Mild (scleral)</option><option>Moderate</option><option>Deep</option></select></div>
+          <div class="field"><label>Cyanosis</label><select id="gen-cyanosis"><option value="">Select</option><option>Absent</option><option>Peripheral</option><option>Central</option></select></div>
+          <div class="field"><label>Clubbing</label><select id="gen-clubbing"><option value="">Select</option><option>Absent</option><option>Grade I</option><option>Grade II</option><option>Grade III</option><option>Grade IV</option></select></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Lymphadenopathy</label><input type="text" id="gen-lymph" placeholder="e.g. Absent / Cervical 1cm, non-tender, mobile"></div>
+          <div class="field"><label>Oedema</label><input type="text" id="gen-oedema" placeholder="e.g. Pitting oedema bilateral ankles ++"></div>
+        </div>
+        <div class="field"><label>Other Signs <span class="guidance">(koilonychia, spider naevi, xanthomata, etc.)</span></label><textarea id="gen-other" placeholder="Document peripheral stigmata..."></textarea></div>
+        <hr class="divider">
+        <div class="subsection-label">System-Specific Examinations</div>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px">Select systems to examine. Specific findings fields appear for each.</p>
+        <div class="add-action-row">
+          <div class="field"><label>Add System</label><select id="exam-dropdown"><option value="">— Select system —</option></select></div>
+          <button class="btn btn-primary add-btn" onclick="addExam()">+ Add</button>
+        </div>
+        <div id="exam-cards-container"></div>
+        <div class="field"><label>Examination Custom Notes</label><textarea id="exam-custom" placeholder="Additional findings, bedside tests..."></textarea></div>
+      </div>
+    </div>
+
+    <div class="card" id="sec-investigations">
+      <div class="card-header" onclick="toggleCard('sec-investigations')">
+        <div class="card-header-left">
+          <div class="section-icon">D</div>
+          <div><div class="section-title">D — Investigations</div><div class="section-subtitle">Labs, imaging, endoscopies, biopsies</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="complete-dot" id="dot-investigations"></div><div class="chevron">▼</div></div>
+      </div>
+      <div class="card-body">
+        <div class="add-action-row">
+          <div class="field" style="flex:1;min-width:130px"><label>Category</label><select id="invest-category"><option value="">— Category —</option><option>Bedside (BLIs)</option><option>Haematology</option><option>Biochemistry</option><option>Microbiology</option><option>Immunology / Serology</option><option>Imaging</option><option>Cardiac</option><option>Respiratory</option><option>Endoscopy</option><option>Histopathology / Biopsy</option><option>Neurology</option></select></div>
+          <div class="field" style="flex:2;min-width:160px"><label>Investigation</label><select id="invest-dropdown"><option value="">— Select —</option></select></div>
+          <button class="btn btn-primary add-btn" onclick="pickerAdd('invest')">+ Add</button>
+        </div>
+        <div class="field">
+          <label>Or Custom Investigation</label>
+          <div class="custom-add-row">
+            <input type="text" id="invest-custom-name" placeholder="Investigation name" style="flex:1;min-width:140px">
+            <input type="text" id="invest-custom-result" placeholder="Result / finding" style="flex:1;min-width:140px">
+            <button class="btn btn-secondary add-btn" onclick="addCustomInvestigation()">+ Add</button>
+          </div>
+        </div>
+        <div id="invest-container"></div>
+        <div class="field"><label>Investigation Summary</label><textarea id="invest-summary" placeholder="Key findings, trends, abnormalities and clinical significance..."></textarea></div>
+      </div>
+    </div>
+
+    <div class="card" id="sec-treatment">
+      <div class="card-header" onclick="toggleCard('sec-treatment')">
+        <div class="card-header-left">
+          <div class="section-icon">E</div>
+          <div><div class="section-title">E — Treatment Plan</div><div class="section-subtitle">Medical, surgical, conservative management</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="complete-dot" id="dot-treatment"></div><div class="chevron">▼</div></div>
+      </div>
+      <div class="card-body">
+        <div class="subsection-label">Diagnosis</div>
+        <div class="field"><label>Primary Diagnosis <span class="guidance">(most likely; ICD code if known)</span></label><input type="text" id="dx-primary" placeholder="e.g. Community-acquired pneumonia – ICD-10: J18.9" oninput="updateProgress()"></div>
+        <div class="field"><label>Differential Diagnoses <span class="guidance">(in order of probability)</span></label><textarea id="dx-differentials" placeholder="1. TB pneumonia&#10;2. Pulmonary oedema&#10;3. Lung malignancy"></textarea></div>
+        <hr class="divider">
+        <div class="add-action-row">
+          <div class="field" style="flex:1;min-width:130px"><label>Category</label><select id="treatment-category-filter"><option value="">— Category —</option><option>Medical</option><option>Surgical</option><option>Conservative</option><option>Monitoring / Nursing</option><option>Referral</option></select></div>
+          <div class="field" style="flex:2;min-width:160px"><label>Treatment / Intervention</label><select id="treatment-dropdown"><option value="">— Select —</option></select></div>
+          <button class="btn btn-primary add-btn" onclick="pickerAdd('treat')">+ Add</button>
+        </div>
+        <div class="field">
+          <label>Or Custom Treatment</label>
+          <div class="custom-add-row">
+            <select id="treat-custom-cat" style="flex:0.8;min-width:110px"><option value="Medical">Medical</option><option value="Surgical">Surgical</option><option value="Conservative">Conservative</option><option value="Monitoring">Monitoring</option><option value="Referral">Referral</option></select>
+            <input type="text" id="treat-custom-name" placeholder="Treatment / drug" style="flex:1.5;min-width:130px">
+            <input type="text" id="treat-custom-detail" placeholder="Dose / details" style="flex:1.5;min-width:130px">
+            <button class="btn btn-secondary add-btn" onclick="addCustomTreatment()">+ Add</button>
+          </div>
+        </div>
+        <div id="treatment-container"></div>
+        <div class="field"><label>Monitoring Plan <span class="guidance">(parameters, frequency, targets)</span></label><textarea id="treat-monitoring" placeholder="e.g. Daily FBC, U&amp;E; BP 4-hourly; repeat CXR at 48h"></textarea></div>
+        <div class="field"><label>Discharge Criteria / Plan</label><textarea id="treat-discharge" placeholder="e.g. Afebrile &gt;24h, tolerating PO, SpO2 &gt;95% on room air"></textarea></div>
+        <div class="field"><label>Patient Counselling Points</label><textarea id="treat-counselling" placeholder="Medication compliance, diet, smoking cessation, follow-up..."></textarea></div>
+      </div>
+    </div>
+
+    <div class="card" id="sec-credentials">
+      <div class="card-header" onclick="toggleCard('sec-credentials')">
+        <div class="card-header-left">
+          <div class="section-icon">F</div>
+          <div><div class="section-title">F — Signing Credentials</div><div class="section-subtitle">Sign-off details for records &amp; exports</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="complete-dot" id="dot-credentials"></div><div class="chevron">▼</div></div>
+      </div>
+      <div class="card-body">
+         <div class="row">
+           <div class="field"><label>Role</label><select id="cred-role" onchange="toggleCredFields(); saveCredentials();"><option value="Student">Student</option><option value="Doctor">Doctor</option></select></div>
+           <div class="field"><label>Name</label><input type="text" id="cred-name" placeholder="Your Name" oninput="saveCredentials()"></div>
+         </div>
+         <div class="row-3" id="cred-student-fields">
+           <div class="field"><label>Roll No</label><input type="text" id="cred-roll" placeholder="e.g. RMU49" oninput="saveCredentials()"></div>
+           <div class="field"><label>Year</label><input type="text" id="cred-year" placeholder="e.g. Final Year" oninput="saveCredentials()"></div>
+           <div class="field"><label>Ward</label><input type="text" id="cred-ward" placeholder="e.g. Medical Unit 1" oninput="saveCredentials()"></div>
+         </div>
+         <div class="row" id="cred-doctor-fields" style="display:none;">
+           <div class="field"><label>Designation</label><input type="text" id="cred-designation" placeholder="e.g. HO / MO / PGR" oninput="saveCredentials()"></div>
+           <div class="field"><label>Department</label><input type="text" id="cred-department" placeholder="e.g. Medicine" oninput="saveCredentials()"></div>
+         </div>
+         <div class="field"><label>Supervisor <span class="guidance">(optional, used in the case log)</span></label><input type="text" id="cred-supervisor" placeholder="e.g. Prof. A. Khan" oninput="saveCredentials()"></div>
+      </div>
+    </div>
+
+    <div class="card" id="sec-review">
+      <div class="card-header" onclick="toggleCard('sec-review')">
+        <div class="card-header-left">
+          <div class="section-icon">G</div>
+          <div><div class="section-title">G — Review &amp; Save</div><div class="section-subtitle">Summary, export, save to database</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="card-body">
+        <div class="btn-group" style="margin-bottom:16px">
+          <button class="btn btn-secondary" onclick="markUnremarkable()">Mark Unremarkable</button>
+          <button class="btn btn-secondary" onclick="refreshSummary()">Refresh Preview</button>
+          <button class="btn btn-secondary" onclick="printCurrentForm()">Export PDF</button>
+          <button class="btn btn-secondary" onclick="shareCurrentForm()">Share summary</button>
+          <button class="btn btn-primary" onclick="saveRecord()">Save Record</button>
+          <button class="btn btn-secondary" onclick="clearForm()">Clear Form</button>
+        </div>
+        <div class="allergy-banner" id="allergy-banner-review" role="status"><span>⚠ Allergies not recorded</span><button type="button" class="btn btn-warning btn-sm" onclick="setNKDA()">No known drug allergies</button></div>
+        <div class="review-checklist" id="review-checklist"><div class="rc-title">Before you finish</div><div id="review-checklist-items"></div></div>
+        <div id="rv-complete" class="rv-complete rv-keep"></div>
+        <div id="rv-signoff" class="rv-so rv-keep"></div>
+        <div id="summary-view"><div class="empty-state"><div class="icon"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg></div><p>Click <strong>Refresh Preview</strong> to see the compiled summary.</p></div></div>
+      </div>
+    </div>
+
+  </div><div class="tab-panel" id="tab-records">
+    <div id="backup-banner" style="display:none; align-items:center; justify-content:space-between; background:var(--warning-light); border:1px solid rgba(217,119,6,0.3); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:14px;">
+       <div style="font-size:0.85rem; color:var(--warning); font-weight:600;" id="backup-banner-msg">Last backup: never</div>
+       <button class="btn btn-warning btn-sm" onclick="exportDatabase()">Back up now</button>
+    </div>
+    <div class="db-controls">
+      <strong style="font-size:0.8rem;font-weight:700;color:var(--text-secondary);align-self:center;margin-right:4px">Database:</strong>
+      <button class="btn btn-secondary btn-sm" onclick="exportDatabase()">Download (.json)</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-file').click()">Upload (.json)</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importDatabase(event)">
+      <button class="btn btn-secondary btn-sm" onclick="openTrash()">Trash</button>
+      <button class="btn btn-secondary btn-sm" onclick="openCaseLog()">Case log (CSV)</button>
+      <button class="btn btn-secondary btn-sm" onclick="openSettings()">Settings</button>
+      <button class="btn btn-danger-outline btn-sm" onclick="confirmClearDatabase()">Clear All</button>
+      <span style="flex:1"></span>
+      <span id="record-count-label"></span>
+    </div>
+    <div class="records-filter">
+      <span class="search-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+      <input type="text" id="search-records" placeholder="Search name, MR, bed, diagnosis, tag…" aria-label="Search records" oninput="recSearchInput()">
+      <button type="button" class="btn btn-secondary rf-btn" id="rf-toggle" aria-expanded="false" aria-controls="rf-panel" onclick="recTogglePanel()">Filters</button>
+    </div>
+    <div class="rf-panel" id="rf-panel" hidden>
+      <div><label for="rf-from">Admitted from</label><input type="date" id="rf-from" onchange="renderRecords()"></div>
+      <div><label for="rf-to">Admitted to</label><input type="date" id="rf-to" onchange="renderRecords()"></div>
+      <div><label for="rf-dept">Department / ward</label><select id="rf-dept" onchange="renderRecords()"><option value="">Any</option></select></div>
+      <div><label for="rf-sex">Sex</label><select id="rf-sex" onchange="renderRecords()"><option value="">Any</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+      <div><label for="rf-band">Age</label><select id="rf-band" onchange="renderRecords()"><option value="">Any age</option><option value="u1">Under 1 year</option><option value="1-11">1–11 years</option><option value="12-17">12–17 years</option><option value="18-39">18–39 years</option><option value="40-64">40–64 years</option><option value="65">65 years and over</option></select></div>
+      <div><label for="rf-tag">Tag</label><select id="rf-tag" onchange="renderRecords()"><option value="">Any</option></select></div>
+      <div><label for="rf-status">Status</label><select id="rf-status" onchange="renderRecords()"><option value="">Any</option><option value="none">No status</option><option>Draft</option><option>Complete</option><option>Discharged</option></select></div>
+      <div><label for="rf-sort">Sort by</label><select id="rf-sort" onchange="renderRecords()"><option value="new">Newest first</option><option value="old">Oldest first</option><option value="name">Name (A–Z)</option><option value="bed">Bed number</option></select></div>
+      <div class="rf-full"><button type="button" class="btn btn-secondary" onclick="recClearFilters()">Clear search and filters</button></div>
+    </div>
+    <div id="records-container"><div class="empty-state"><div class="icon"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div><p>No saved records yet. Fill out the Intake Form and save a patient.</p></div></div>
+  </div>
+
+</div><button id="fab-new-intake" onclick="newIntake()">+ New Intake</button>
+
+<div id="toast-container" role="status" aria-live="polite" aria-relevant="additions"></div>
+
+<div id="modal-overlay" style="display:none" class="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="datacheck.js"></script>
+<script src="util.js"></script>
+<script src="calc.js"></script>
+<script src="schema.js"></script>
+<script src="db.js"></script>
+<script src="ui.js"></script>
+<script src="settings.js"></script>
+<script src="form.js"></script>
+<script src="complaints.js"></script>
+<script src="sections.js"></script>
+<script src="pickers.js"></script>
+<script src="templates.js"></script>
+<script src="carry.js"></script>
+<script src="notes.js"></script>
+<script src="search.js"></script>
+<script src="history.js"></script>
+<script src="caselog.js"></script>
+<script src="print.js"></script>
+<script src="review.js"></script>
+<script src="summary.js"></script>
+<script src="records.js"></script>
+<script src="backup.js"></script>
+<script src="safety.js"></script>
+<script src="lock.js"></script>
+<script src="appearance.js"></script>
+<script src="pwa.js"></script>
+<script src="a11y.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
